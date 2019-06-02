@@ -4,7 +4,7 @@
 
 Provide a generic ingress api routing to Kafka topic queues for backend apps
 to consume (e.g. using kubeless functions to loosely couple the apis from
-backend apis)
+backend apis).
 
 ### Setup Environment
 Port-Forward:
@@ -20,7 +20,27 @@ go run main.go
 ```
 
 ### Configure
-See `config.yaml` for exposed api paths and related kafka queue topics.
+See [config.yaml](./config.yaml) for exposed api paths and related kafka queue topics.
+
+### API Discovery
+```bash
+curl -sS http://127.0.0.1:3303 | jq
+{
+  "_links": {
+    "curies": [
+      {
+        "href": "https://github.example.com/mysite/docs.md",
+        "name": "Site API"
+      }
+    ],
+    "self": {
+      "href": "/"
+    }
+  },
+  "description": "Lucy_Proxy - Loose Coupling API Proxy",
+  "title": "Lucy_Proxy - Loose Coupling API Proxy"
+}
+```
 
 ### Feed requests to a Kafka Queue
 (e.g. to be picked up by Kubeless function)
