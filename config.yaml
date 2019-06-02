@@ -1,0 +1,37 @@
+---
+kafka:
+  brokers:
+    - "172.17.0.1:9092"
+
+# Information here is presented at the root of the api: GET /, returned as JSON
+site:
+  title: "Lucy_Proxy - Loose Coupling API Proxy"
+  description: "Lucy_Proxy - Loose Coupling API Proxy"
+  _links:
+    self:
+      href: /
+    curies:
+      - name: Site API
+        href: "https://github.example.com/mysite/docs.md"
+
+services:
+  - name: ping
+    path: /ping
+    handler: Kafka
+    # kafka event queue topic name
+    request_topic: ping
+    response_topic: ping # loop back for testing, simply returns what was sent
+
+  # - name: queued_example_v1
+  #   path: /queued_example/v1
+  #   handler: Kafka
+  #   # kafka event queue topic name
+  #   request_topic: queued_example_request
+  #   response_topic: queued_example_response
+
+  - name: automation_v1
+    path: /automation/v1
+    handler: Kafka
+    # kafka event queue topic name
+    request_topic: automation_v1_request
+    response_topic: automation_v1_response
