@@ -4,7 +4,7 @@
 
 Provide a generic ingress api routing to Kafka topic queues for backend apps
 to consume (e.g. using kubeless functions to loosely couple the apis from
-backend apis)
+backend apis) - see [config.yaml](./config.yaml).
 
 ### Setup Environment
 Port-Forward:
