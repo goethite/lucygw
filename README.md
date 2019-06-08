@@ -60,7 +60,7 @@ curl -sS http://127.0.0.1:3303/automation/v1 \
 ## Kubeless consumer examples
 
 See:
-* [ansible-handler.py](kubeless/ansible-handler.py) run ansible in docker
+* [ansible-coupler.py](kubeless/ansible-coupler.py) run ansible in docker
   containers as k8s batch jobs.
-* [gostint-handler.py](kubeless/gostint-handler.py) (in progress) PoC stub for
+* [gostint-coupler.py](kubeless/gostint-coupler.py) (in progress) PoC stub for
   gostint api.
