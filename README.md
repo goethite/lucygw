@@ -1,12 +1,10 @@
 # Lucy_Proxy - Experiments in Microservices Loose Coupling
 
-## Smart Proxy / Ingress
-
 Provide a generic ingress api routing to Kafka topic queues for backend apps
 to consume (e.g. using kubeless functions to loosely couple the apis from
 backend apis).
 
-### Setup Environment
+## Setup Environment
 Port-Forward:
 ```bash
 kubectl -n kubeless port-forward --address 0.0.0.0 service/kafka 9092
@@ -19,10 +17,10 @@ cd lucy_proxy
 go run main.go
 ```
 
-### Configure
+## Configure
 See [config.yaml](./config.yaml) for exposed api paths and related kafka queue topics.
 
-### API Discovery
+## API Discovery
 ```bash
 curl -sS http://127.0.0.1:3303 | jq
 {
@@ -42,10 +40,10 @@ curl -sS http://127.0.0.1:3303 | jq
 }
 ```
 
-### Feed requests to a Kafka Queue
+## Feed requests to a Kafka Queue
 (e.g. to be picked up by Kubeless function)
 
-#### POST a Request
+### POST a Request
 ```bash
 curl -sS http://127.0.0.1:3303/ping \
   -X POST \
@@ -58,3 +56,11 @@ curl -sS http://127.0.0.1:3303/automation/v1 \
   -H "Content-type: application/json" \
   --data '{"foo":"bar"}'
 ```
+
+## Kubeless consumer examples
+
+See:
+* [ansible-handler.py](kubeless/ansible-handler.py) run ansible in docker
+  containers as k8s batch jobs.
+* [gostint-handler.py](kubeless/gostint-handler.py) (in progress) PoC stub for
+  gostint api.
