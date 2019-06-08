@@ -12,6 +12,8 @@ kubeless trigger kafka create gostint-coupler \
   --function-selector created-by=kubeless,function=gostint-coupler \
   --trigger-topic automation_v1_request
 
+kubeless function delete gostint-coupler
+
 curl -sS http://127.0.0.1:3303/automation/v1 \
     -X POST \
     -H "Content-type: application/json" \

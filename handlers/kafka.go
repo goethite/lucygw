@@ -104,11 +104,19 @@ func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap
 		resp := <-respChan
 		log.Printf("resp from chan: %v", resp)
 
-		res := jsonutils.JSONMap{}
-		res["data"] = resp
-		render.JSON(w, r, res)
+		render.JSON(w, r, resp)
 	})
 
+	return r
+}
+
+func openTopicReader(brokers []string, service *jsonutils.JSONMap) *kafka.Reader {
+	ns, _ := time.ParseDuration("3s")
+	r := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: brokers,
+		Topic:   (*service)["response_topic"].(string),
+		MaxWait: time.Duration(ns.Nanoseconds()),
+	})
 	return r
 }
 
@@ -118,12 +126,7 @@ func (h *Handlers) InitKafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSO
 	for _, b := range (*kafkaCfg)["brokers"].(jsonutils.JSONArray) {
 		brokers = append(brokers, b.(string))
 	}
-	ns, _ := time.ParseDuration("3s")
-	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: brokers,
-		Topic:   (*service)["response_topic"].(string),
-		MaxWait: time.Duration(ns.Nanoseconds()),
-	})
+	r := openTopicReader(brokers, service)
 	w := kafka.NewWriter(kafka.WriterConfig{
 		Brokers:  brokers,
 		Topic:    (*service)["request_topic"].(string),
@@ -134,8 +137,14 @@ func (h *Handlers) InitKafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSO
 		for {
 			m, err := r.ReadMessage(context.Background())
 			if err != nil {
-				log.Printf("Failed to read from topic")
-				break
+				log.Printf("Failed to read from topic '%s', will retry", (*service)["response_topic"].(string))
+				log.Printf("err: %v", err)
+				time.Sleep(5 * time.Second)
+
+				// Recover reader connection
+				r.Close()
+				r = openTopicReader(brokers, service)
+				continue
 			}
 			log.Printf("msg rcv offset: %d: key: %s, value: %s", m.Offset, m.Key, m.Value)
 
