@@ -50,11 +50,64 @@ curl -sS http://127.0.0.1:3303/ping \
   -H "Content-type: application/json" \
   --data '{"foo":"bar"}'
 ```
+
 ```bash
 curl -sS http://127.0.0.1:3303/automation/v1 \
   -X POST \
   -H "Content-type: application/json" \
   --data '{"foo":"bar"}'
+```
+
+Ansible ping:
+```bash
+curl -sS http://127.0.0.1:3303/automation/v1/ping \
+  -X POST \
+  -H "Content-type: application/json" \
+  --data '{}' \
+  | jq .data.log -r
+```
+
+```
+[WARNING]: Unable to parse /etc/ansible/hosts as an inventory source
+[WARNING]: No inventory was parsed, only implicit localhost is available
+[WARNING]: provided hosts list is empty, only localhost is available. Note
+that the implicit localhost does not match 'all'
+127.0.0.1 | SUCCESS => {
+   "changed": false,
+   "ping": "pong"
+}
+```
+
+Run playbook
+```bash
+curl -sS \
+  'http://127.0.0.1:3303/automation/v1/play?group=goethite%2fgostint-ansible%3a2.7.5&name=dump.yml' \
+  -X POST \
+  -H "Content-type: application/json" \
+  --data '{}' | jq .data.log -r
+```
+
+```
+PLAY [all] *********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [127.0.0.1]
+
+TASK [debug] *******************************************************************
+ok: [127.0.0.1] => {
+    "ansible_password": "VARIABLE IS NOT DEFINED!"
+}
+
+TASK [debug] *******************************************************************
+ok: [127.0.0.1] => {
+    "ansible_connection": "local"
+}
+
+TASK [shell] *******************************************************************
+changed: [127.0.0.1]
+
+PLAY RECAP *********************************************************************
+127.0.0.1                  : ok=4    changed=1    unreachable=0    failed=0
 ```
 
 ## Kubeless consumer examples

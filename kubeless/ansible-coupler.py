@@ -58,120 +58,39 @@ def get_job_status(batchApi, namespace, job_name):
 
 
 def handler(event, context):
-    # print("event:", event)
+    print("event:", event)
 
     # Establish the producer for each function call, cannot be global...
     producer = KafkaProducer(
         bootstrap_servers=['kafka.kubeless.svc.cluster.local:9092'])
 
-    batchApi = client.BatchV1Api()
-    namespace = "default"
-    body = {
-        "api_version": "batch/v1",
-        "kind": "Job",
-        "metadata": {"name": "myjob"},
-        "spec": {
-            "template": {
-                "spec": {
-                    "containers": [
-                        {
-                            "name": "myjob",
-                            "image": "jmal98/ansiblecm:2.5.5",
-                            "imagePullPolicy": "Always",
-                            "command": ["ansible"],
-                            "args": ["-m", "ping", "127.0.0.1"]
-                        }
-                    ],
-                    "restartPolicy": "Never"
-                }
+    try:
+        wrapped(event, context, producer)
+    except Exception as err:
+        try:
+            response = {
+                "event_uuid": event["data"]["event_uuid"],
+                "code": 500,
+                "error": str(err),
+                "stacktrace": traceback.format_exc()
             }
-        }
-    }
 
-    try:
-        batchApi_resp = batchApi.create_namespaced_job(
-            namespace=namespace,
-            body=body
-        )
-    except client.rest.ApiException as e:
-        print("Error calling k8s batch api: %s\n" % e)
-    except Exception as err:
-        print(str(err))
-        print(traceback.format_exc())
-        return
+            new_event = bytearray(json.dumps(response), encoding='utf-8')
+            producer.send('automation_v1_response', key=b'event',
+                          value=new_event).get(timeout=30)
+            producer.flush(timeout=5)
+        except Exception as err:
+            print(str(err))
+            print(traceback.format_exc())
 
-    # print("create batchApi_resp:", batchApi_resp)
 
-    job_status = {}
-    while True:
-        time.sleep(1)
-        job_status = get_job_status(batchApi, namespace, "myjob")
-        if job_status.active is None:
-            break
-
-    try:
-        pods = v1.list_namespaced_pod(
-            namespace, label_selector="job-name=myjob")
-    except client.rest.ApiException as e:
-        print("Error calling k8s batch api: %s\n" % e)
-    except Exception as err:
-        print(str(err))
-        print(traceback.format_exc())
-        return
-
-    pod = pods.items[0]
-    pod_name = pod.metadata.name
-
-    # Get log from job pod
-    try:
-        pod_log = v1.read_namespaced_pod_log(
-            pod_name,
-            namespace,
-            # timestamps=True
-            tail_lines=100  # limit to last n lines
-        )
-    except client.rest.ApiException as e:
-        print("Error calling k8s batch api: %s\n" % e)
-    except Exception as err:
-        print(str(err))
-        print(traceback.format_exc())
-        return
-    print("pod_log:", pod_log)
-
-    try:
-        batchApi.delete_namespaced_job(
-            namespace=namespace,
-            name="myjob",
-            body={}
-        )
-    except client.rest.ApiException as e:
-        print("Error calling k8s batch api: %s\n" % e)
-    except Exception as err:
-        print(str(err))
-        print(traceback.format_exc())
-        return
-
-    try:
-        v1.delete_namespaced_pod(pod_name, namespace, body={})
-    except client.rest.ApiException as e:
-        print("Error calling k8s batch api: %s\n" % e)
-    except Exception as err:
-        print(str(err))
-        print(traceback.format_exc())
-        return
-
-    # Return response event
+def sendError(event, code, err, producer):
     try:
         response = {
             "event_uuid": event["data"]["event_uuid"],
-            "data": {
-                "status": {
-                    "active": job_status.active,
-                    "failed": job_status.failed,
-                    "succeeded": job_status.succeeded
-                },
-                "log": pod_log
-            }
+            "code": code,
+            "error": err,
+            "stacktrace": ""
         }
 
         new_event = bytearray(json.dumps(response), encoding='utf-8')
@@ -181,4 +100,176 @@ def handler(event, context):
     except Exception as err:
         print(str(err))
         print(traceback.format_exc())
-        return
+
+
+def wrapped(event, context, producer):
+    body = {}
+    if event["data"]["body"] is not None and event["data"]["body"] != "":
+        body = json.loads(
+            base64.b64decode(event["data"]["body"])
+        )
+    path = event["data"]["path"]
+    form = event["data"]["form"]
+    method = event["data"]["method"]
+    headers = event["data"]["headers"]
+
+    print("%s: %s form: %s, body: %s" % (method, path, form, body))
+
+    namespace = "default"
+
+    # Routing
+    if path == "/ping":
+        body = {
+            "api_version": "batch/v1",
+            "kind": "Job",
+            "metadata": {"name": "myjob"},
+            "spec": {
+                "template": {
+                    "spec": {
+                        "containers": [
+                            {
+                                "name": "myjob",
+                                # "image": "jmal98/ansiblecm:2.5.5",
+                                "image": "goethite/gostint-ansible:2.7.5",
+                                "imagePullPolicy": "Always",
+                                "command": ["ansible"],
+                                "args": ["-m", "ping", "127.0.0.1"]
+                            }
+                        ],
+                        "restartPolicy": "Never"
+                    }
+                }
+            }
+        }
+        send(event, namespace, body, producer)
+
+    elif path == "/play":
+        # TODO: demo loose coupling here
+        group = form.get("group")[0]
+        name = form.get("name")[0]
+
+        if group is None or group == "":
+            sendError(event, 501, "param group is missing", producer)
+            return
+        if name is None or name == "":
+            sendError(event, 501, "param name is missing", producer)
+            return
+
+        body = {
+            "api_version": "batch/v1",
+            "kind": "Job",
+            "metadata": {"name": "myjob"},  # TODO:
+            "spec": {
+                "backoffLimit": 0,
+                "template": {
+                    "spec": {
+                        "initContainers": [
+                            {
+                                "name": "init-inventory",
+                                "image": "busybox",
+                                "command": [
+                                    "sh",
+                                    "-c",
+                                    "echo '127.0.0.1 ansible_connection=local' > /tmp/inv/hosts"
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "mountPath": "/tmp/inv",
+                                        "name": "inventory"
+                                    }
+                                ]
+                            }
+                        ],
+                        "containers": [
+                            {
+                                "name": "myjob",  # TODO:
+                                # "image": "jmal98/ansiblecm:2.5.5",
+                                # "image": "goethite/gostint-ansible:2.7.5",
+                                "image": group,
+                                "imagePullPolicy": "Always",
+                                # "command": ["ansible"],
+                                "args": [
+                                    "-i", "/tmp/inv/hosts",
+                                    # "dump.yml"
+                                    name
+                                ],
+                                "volumeMounts": [
+                                    {
+                                        "mountPath": "/tmp/inv",
+                                        "name": "inventory"
+                                    }
+                                ]
+                            }
+                        ],
+                        "volumes": [
+                            {
+                                "name": "inventory",
+                                "medium": "Memory",
+                                "emptyDir": {}
+                            }
+                        ],
+                        "restartPolicy": "Never"
+                    }
+                }
+            }
+        }
+        send(event, namespace, body, producer)
+
+    else:
+        sendError(event, 501, "Path %s not implemented" % path, producer)
+
+
+def send(event, namespace, body, producer):
+    batchApi = client.BatchV1Api()
+    batchApi_resp = batchApi.create_namespaced_job(
+        namespace=namespace,
+        body=body
+    )
+
+    # print("create batchApi_resp:", batchApi_resp)
+
+    job_status = {}
+    while True:
+        time.sleep(1)
+        job_status = get_job_status(batchApi, namespace, "myjob")  # TODO:
+        if job_status.active is None:
+            break
+
+    pods = v1.list_namespaced_pod(
+        namespace, label_selector="job-name=myjob")  # TODO:
+
+    pod = pods.items[0]
+    pod_name = pod.metadata.name
+
+    # Get log from job pod
+    pod_log = v1.read_namespaced_pod_log(
+            pod_name,
+            namespace,
+            # timestamps=True
+            tail_lines=100  # limit to last n lines
+        )
+    # print("pod_log:", pod_log)
+
+    batchApi.delete_namespaced_job(
+        namespace=namespace,
+        name="myjob",
+        body={}
+    )
+
+    v1.delete_namespaced_pod(pod_name, namespace, body={})
+    response = {
+        "event_uuid": event["data"]["event_uuid"],
+        "data": {
+            "status": {
+                "active": job_status.active,
+                "failed": job_status.failed,
+                "succeeded": job_status.succeeded
+            },
+            "log": pod_log
+        }
+    }
+
+    new_event = bytearray(json.dumps(response), encoding='utf-8')
+    producer.send('automation_v1_response', key=b'event',
+                  value=new_event).get(timeout=30)
+    producer.flush(timeout=5)
