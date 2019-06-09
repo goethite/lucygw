@@ -3,6 +3,8 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -103,6 +105,24 @@ func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap
 		// wait for response event (by uuid) from kafka
 		resp := <-respChan
 		log.Printf("resp from chan: %v", resp)
+
+		if _, ok := resp["error"]; ok {
+			code := 500
+			if _, ok := resp["code"]; ok {
+				code = int(resp["code"].(float64))
+			}
+			render.Render(w, r, &ErrResponse{
+				Err:            errors.New(resp["error"].(string)),
+				HTTPStatusCode: code,
+				StatusText:     "Execution Error.",
+				ErrorText: fmt.Sprintf(
+					"%s\n%s",
+					resp["error"].(string),
+					resp["stacktrace"].(string),
+				),
+			})
+			return
+		}
 
 		render.JSON(w, r, resp)
 	})
