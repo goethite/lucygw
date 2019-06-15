@@ -18,11 +18,35 @@ kubeless trigger kafka create ansible-coupler \
   --function-selector created-by=kubeless,function=ansible-coupler \
   --trigger-topic automation_v1_request
 
-curl -sS http://127.0.0.1:3303/automation/v1 \
-    -X POST \
-    -H "Content-type: application/json" \
-    --data '{"foo":"bar"}'
-{"data":{"data":{"value":"my response"},"event_uuid":"2a8bdf29-8568-11e9-86b3-0242ac110002"}
+curl -sS \
+  'http://127.0.0.1:3303/automation/v1/play?group=goethite%2fgostint-ansible%3a2.7.5&name=dump.yml' \
+  -X POST \
+  -H "Content-type: application/json" \
+  --data '{}' | jq .data.log -r
+
+Returns:
+
+PLAY [all] *********************************************************************
+
+TASK [Gathering Facts] *********************************************************
+ok: [127.0.0.1]
+
+TASK [debug] *******************************************************************
+ok: [127.0.0.1] => {
+    "ansible_password": "VARIABLE IS NOT DEFINED!"
+}
+
+TASK [debug] *******************************************************************
+ok: [127.0.0.1] => {
+    "ansible_connection": "local"
+}
+
+TASK [shell] *******************************************************************
+changed: [127.0.0.1]
+
+PLAY RECAP *********************************************************************
+127.0.0.1                  : ok=4    changed=1    unreachable=0    failed=0
+
 """
 
 import sys
