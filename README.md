@@ -117,3 +117,9 @@ See:
   containers as k8s batch jobs.
 * [gostint-coupler.py](kubeless/gostint-coupler.py) (in progress) PoC stub for
   gostint api.
+
+## Consumer service examples
+
+See:
+* [ansible-k8s](services/ansible-k8s) like ansible-coupler above, but as a
+kafka consumer service.
