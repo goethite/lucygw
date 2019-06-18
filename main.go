@@ -71,7 +71,11 @@ func main() {
 
 	// Default site doc
 	router.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		render.JSON(w, r, cfg["site"])
+		siteDoc := jsonutils.JSONMap{
+			"site":     cfg["site"],
+			"services": cfg["services"],
+		}
+		render.JSON(w, r, siteDoc)
 	})
 
 	// Establish service handlers
