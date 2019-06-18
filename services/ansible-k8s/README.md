@@ -15,6 +15,9 @@ source bin/activate
 ```
 
 ### Running
+See file [group_config.yaml](./group_config.yaml) for group to docker image
+mapping.
+
 ```bash
 (ansible-k8s) $ export KUBECONFIG=...
 (ansible-k8s) $ python3 ansible-k8s.py
@@ -22,7 +25,7 @@ source bin/activate
 
 ```bash
 curl -sS \
-  'http://127.0.0.1:3303/automation/v1/play?group=goethite%2fgostint-ansible%3a2.7.5&name=dump.yml' \
+  'http://127.0.0.1:3303/automation/v1/play?group=goethite&name=dump.yml' \
   -X POST \
   -H "Content-type: application/json" \
   --data '{}' | jq .data.log -r

@@ -1,17 +1,23 @@
 
-import sys
+# import sys
 import os
 import traceback
 import time
 import json
-import base64
-import tempfile
+from yaml import load
+# import base64
+# import tempfile
 
 from kubernetes import client, config
-from kafka import KafkaProducer, KafkaConsumer, TopicPartition
+from kafka import KafkaProducer, KafkaConsumer
 
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+GROUP_CONFIG_FILE = "./group_config.yaml"
+
+group_config = load(open(GROUP_CONFIG_FILE, 'r'))
+print("group_config:", group_config)
 
 # config.load_incluster_config()
 config.load_kube_config(config_file=os.environ['KUBECONFIG'])
@@ -42,10 +48,10 @@ def get_job_status(batchApi, namespace, job_name):
     return batchApi_resp.status
 
 
-def sendError(event, code, err, producer):
+def sendError(event_uuid, code, err, producer):
     try:
         response = {
-            "event_uuid": event["data"]["event_uuid"],
+            "event_uuid": event_uuid,
             "code": code,
             "error": err,
             "stacktrace": ""
@@ -60,12 +66,12 @@ def sendError(event, code, err, producer):
         print(traceback.format_exc())
 
 
-def wrapped(event, producer):
-    evbody = {}
-    value = event.value
-    if value is not None and value != "":
-        evbody = json.loads(value)
-    print("evbody:", evbody)
+def wrapped(evbody, producer):
+    # evbody = {}
+    # value = event.value
+    # if value is not None and value != "":
+    #     evbody = json.loads(value)
+    # print("evbody:", evbody)
     path = evbody["path"]
     form = evbody["form"]
     method = evbody["method"]
@@ -108,11 +114,23 @@ def wrapped(event, producer):
         name = form.get("name")[0]
 
         if group is None or group == "":
-            sendError(event, 501, "param group is missing", producer)
+            sendError(evbody["event_uuid"], 501,
+                      "param group is missing", producer)
             return
         if name is None or name == "":
-            sendError(event, 501, "param name is missing", producer)
+            sendError(evbody["event_uuid"], 501,
+                      "param name is missing", producer)
             return
+
+        if group not in group_config["groups"]:
+            sendError(
+                evbody["event_uuid"],
+                501,
+                "param group does not have entry in group_config",
+                producer
+            )
+            return
+        image = group_config["groups"][group]["image"]
 
         body = {
             "api_version": "batch/v1",
@@ -144,7 +162,7 @@ def wrapped(event, producer):
                                 "name": "myjob",  # TODO:
                                 # "image": "jmal98/ansiblecm:2.5.5",
                                 # "image": "goethite/gostint-ansible:2.7.5",
-                                "image": group,
+                                "image": image,
                                 "imagePullPolicy": "Always",
                                 # "command": ["ansible"],
                                 "args": [
@@ -175,7 +193,8 @@ def wrapped(event, producer):
         send(evbody["event_uuid"], namespace, body, producer)
 
     else:
-        sendError(event, 501, "Path %s not implemented" % path, producer)
+        sendError(evbody["event_uuid"], 501,
+                  "Path %s not implemented" % path, producer)
 
 
 def send(event_uuid, namespace, body, producer):
@@ -241,12 +260,18 @@ for event in consumer:
     producer = KafkaProducer(
         bootstrap_servers=['127.0.0.1:9092'])
 
+    evbody = {}
+    value = event.value
+    if value is not None and value != "":
+        evbody = json.loads(value)
+    print("evbody:", evbody)
+
     try:
-        wrapped(event, producer)
+        wrapped(evbody, producer)
     except Exception as err:
         try:
             response = {
-                "event_uuid": event["data"]["event_uuid"],
+                "event_uuid": evbody["event_uuid"],
                 "code": 500,
                 "error": str(err),
                 "stacktrace": traceback.format_exc()
