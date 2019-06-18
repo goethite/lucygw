@@ -1,0 +1,4 @@
+---
+groups:
+  goethite:
+    image: "goethite/gostint-ansible:2.7.5"
