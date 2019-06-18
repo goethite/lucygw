@@ -24,19 +24,37 @@ See [config.yaml](./config.yaml) for exposed api paths and related kafka queue t
 ```bash
 curl -sS http://127.0.0.1:3303 | jq
 {
-  "_links": {
-    "curies": [
-      {
-        "href": "https://github.example.com/mysite/docs.md",
-        "name": "Site API"
-      }
-    ],
-    "self": {
-      "href": "/"
+  "services": [
+    {
+      "handler": "Kafka",
+      "name": "ping",
+      "path": "/ping",
+      "request_topic": "ping",
+      "response_topic": "ping"
+    },
+    {
+      "handler": "Kafka",
+      "name": "automation_v1",
+      "path": "/automation/v1",
+      "request_topic": "automation_v1_request",
+      "response_topic": "automation_v1_response"
     }
-  },
-  "description": "Lucy_Proxy - Loose Coupling API Proxy",
-  "title": "Lucy_Proxy - Loose Coupling API Proxy"
+  ],
+  "site": {
+    "_links": {
+      "curies": [
+        {
+          "href": "https://github.example.com/mysite/docs.md",
+          "name": "Site API"
+        }
+      ],
+      "self": {
+        "href": "/"
+      }
+    },
+    "description": "Lucy_Proxy - Loose Coupling API Proxy",
+    "title": "Lucy_Proxy - Loose Coupling API Proxy"
+  }
 }
 ```
 
