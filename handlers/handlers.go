@@ -3,7 +3,7 @@ package handlers
 import (
 	"sync"
 
-	"github.com/gbevan/lucy_proxy/jsonutils"
+	"github.com/gbevan/lucygw/jsonutils"
 )
 
 var (

@@ -17,7 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
-	"github.com/gbevan/lucy_proxy/jsonutils"
+	"github.com/gbevan/lucygw/jsonutils"
 )
 
 // KafkaEventReq a generic forwardnig of a request via kafka queue

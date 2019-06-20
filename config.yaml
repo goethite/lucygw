@@ -5,8 +5,8 @@ kafka:
 
 # Information here is presented at the root of the api: GET /, returned as JSON
 site:
-  title: "Lucy_Proxy - Loose Coupling API Proxy"
-  description: "Lucy_Proxy - Loose Coupling API Proxy"
+  title: "lucygw - Loose Coupling API Proxy"
+  description: "lucygw - Loose Coupling API Proxy"
   _links:
     self:
       href: /

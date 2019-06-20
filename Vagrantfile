@@ -1,14 +1,14 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
-extras = "./lucy_proxy/init_main.sh"
+extras = "./lucygw/init_main.sh"
 
 VAGRANTFILE_API_VERSION = "2"
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
-  config.vm.define "gostint-dev", primary: true do |ubuntu|
+  config.vm.define "lucygw", primary: true do |ubuntu|
     ubuntu.vm.usable_port_range = 2300..2350
     ubuntu.vm.provision "shell", inline: extras
-    ubuntu.vm.synced_folder "./", "/home/vagrant/lucy_proxy"
+    ubuntu.vm.synced_folder "./", "/home/vagrant/lucygw"
     ubuntu.vm.provider "docker" do |d|
       d.image = "gbevan/vagrant-ubuntu-dev:bionic"
       d.has_ssh = true

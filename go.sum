@@ -1,6 +1,8 @@
 github.com/DataDog/zstd v1.4.0/go.mod h1:1jcaCB/ufaK+sKp1NBhlGmpz41jOoPQ35bpF36t7BBo=
 github.com/apex/log v1.1.0 h1:J5rld6WVFi6NxA6m8GJ1LJqu3+GiTFIt3mYv27gdQWI=
 github.com/apex/log v1.1.0/go.mod h1:yA770aXIDQrhVOIGurT/pVdfCpSq1GQV/auzMN5fzvY=
+github.com/gbevan/lucy_proxy v0.0.0-20190618104000-03ca207ed73f h1:jN/tyEuaSPccE7tasFAdSoJhGwKxV5qGKHjzP+EP6n4=
+github.com/gbevan/lucy_proxy v0.0.0-20190618104000-03ca207ed73f/go.mod h1:pDVdEYjAJQo2rgnpvVp7w4BsrD3CS9YHarooso6DHF8=
 github.com/go-chi/chi v4.0.2+incompatible h1:maB6vn6FqCxrpz4FqWdh4+lwpyZIQS7YEAUcHlgXVRs=
 github.com/go-chi/chi v4.0.2+incompatible/go.mod h1:eB3wogJHnLi3x/kFX2A+IbTBlXxmMeXJVKy9tTv1XzQ=
 github.com/go-chi/chi v4.0.3-0.20190430225759-988e36e484c9+incompatible h1:vho6zrgF8AiFB12bukfr2Q0fiwEfgUoKMY6PjL0VffI=

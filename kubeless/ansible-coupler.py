@@ -1,7 +1,7 @@
 """
 PoC Execute Ansible in docker containers via K8s Batch Jobs.
 
-Triggered from a kafka topic queue from lucy_proxy.
+Triggered from a kafka topic queue from lucygw.
 
 kubeless function deploy ansible-coupler \
   --from-file ansible-coupler.py \
