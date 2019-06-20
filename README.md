@@ -1,8 +1,9 @@
-# Lucy_Proxy - Experiments in Microservices Loose Coupling
+# lucygw - Experiments in Microservices Loose Coupling with Go, Kafka and Python
+(formally called `lucy_proxy`)
 
 Provide a generic ingress api routing to Kafka topic queues for backend apps
-to consume (e.g. using kubeless functions to loosely couple the apis from
-backend apis).
+to consume (e.g. using kubeless functions or dedicated services to loosely
+couple with backend apis).
 
 ## Setup Environment
 Port-Forward:
@@ -13,7 +14,7 @@ kubectl -n kubeless port-forward --address 0.0.0.0 service/kafka 9092
 ```bash
 vagrant up
 vagrant ssh
-cd lucy_proxy
+cd lucygw
 go run main.go
 ```
 
@@ -52,8 +53,8 @@ curl -sS http://127.0.0.1:3303 | jq
         "href": "/"
       }
     },
-    "description": "Lucy_Proxy - Loose Coupling API Proxy",
-    "title": "Lucy_Proxy - Loose Coupling API Proxy"
+    "description": "lucygw - Loose Coupling API Proxy",
+    "title": "lucygw - Loose Coupling API Proxy"
   }
 }
 ```

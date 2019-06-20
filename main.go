@@ -13,8 +13,8 @@ import (
 	"github.com/go-chi/render"
 	yaml "gopkg.in/yaml.v2"
 
-	"github.com/gbevan/lucy_proxy/handlers"
-	"github.com/gbevan/lucy_proxy/jsonutils"
+	"github.com/gbevan/lucygw/handlers"
+	"github.com/gbevan/lucygw/jsonutils"
 )
 
 var (
@@ -120,7 +120,7 @@ func main() {
 		}())
 	}
 
-	log.Printf("lucy_proxy listening on https port %d", serverPort)
+	log.Printf("lucygw listening on https port %d", serverPort)
 	// log.Fatal(http.ListenAndServeTLS(
 	log.Fatal(http.ListenAndServe(
 		fmt.Sprintf(":%d", serverPort),
