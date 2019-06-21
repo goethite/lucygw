@@ -73,8 +73,13 @@ func CreateEventReq(servicePath *string, w http.ResponseWriter, r *http.Request)
 	return &evReq, nil
 }
 
+// Correlation a correlator entry
+type Correlation struct {
+	respChan *chan jsonutils.JSONMap
+}
+
 var (
-	correlator    = make(map[string]*chan jsonutils.JSONMap)
+	correlator    = make(map[string]Correlation)
 	correlatorMux sync.Mutex
 )
 
@@ -82,29 +87,30 @@ var (
 type Handlers struct {
 }
 
-// Init - initialise the handlers with kafka
-// func (h *Handlers) Init(cfg *jsonutils.JSONMap) {
-// }
-
 // AddCorrelator adds UUID lookup for a request's response to be fed back to
 // the requestor.
-func (h *Handlers) AddCorrelator(ccUUID string, cc *chan jsonutils.JSONMap) {
+func (h *Handlers) AddCorrelator(ccUUID string, respChan *chan jsonutils.JSONMap) {
+	cor := Correlation{
+		respChan: respChan,
+	}
 	correlatorMux.Lock()
-	correlator[ccUUID] = cc
-	correlatorMux.Unlock()
+	defer correlatorMux.Unlock()
+	correlator[ccUUID] = cor
 }
 
 // GetCorrelator Gets the response channel by request UUID
-func (h *Handlers) GetCorrelator(ccUUID string) *chan jsonutils.JSONMap {
+func (h *Handlers) GetCorrelator(ccUUID string) *Correlation {
 	correlatorMux.Lock()
-	cc := correlator[ccUUID]
-	correlatorMux.Unlock()
-	return cc
+	defer correlatorMux.Unlock()
+	if cor, ok := correlator[ccUUID]; ok {
+		return &cor
+	}
+	return nil
 }
 
 // DeleteCorrelator deletes the UUID/response channel
 func (h *Handlers) DeleteCorrelator(ccUUID string) {
 	correlatorMux.Lock()
+	defer correlatorMux.Unlock()
 	delete(correlator, ccUUID)
-	correlatorMux.Unlock()
 }
