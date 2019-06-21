@@ -109,7 +109,7 @@ func (h *Handlers) InitKafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSO
 		Balancer: &kafka.LeastBytes{},
 	})
 
-	go func(c *map[string]*chan jsonutils.JSONMap) {
+	go func() {
 		for {
 			m, err := r.ReadMessage(context.Background())
 			if err != nil {
@@ -137,16 +137,16 @@ func (h *Handlers) InitKafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSO
 			}
 
 			ccUUID := payload["event_uuid"].(string)
-			cc := h.GetCorrelator(ccUUID)
-			if cc != nil {
-				log.Printf("Found correlator channel")
-				*cc <- payload
+			cor := h.GetCorrelator(ccUUID)
+			if cor != nil {
+				log.Printf("Found correlator (channel)")
+				*cor.respChan <- payload
 				h.DeleteCorrelator(ccUUID)
 			} else {
 				log.Printf("NOT Found correlator channel")
 			}
 		}
-	}(&correlator)
+	}()
 
 	return w
 }
