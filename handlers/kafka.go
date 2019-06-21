@@ -5,31 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
-	"strings"
 	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/render"
-	"github.com/google/uuid"
 	"github.com/segmentio/kafka-go"
 
 	"github.com/gbevan/lucygw/jsonutils"
 )
-
-// KafkaEventReq a generic forwardnig of a request via kafka queue
-type KafkaEventReq struct {
-	EventUUID        string              `json:"event_uuid"`
-	Method           string              `json:"method"`
-	Path             string              `json:"path"`
-	Headers          map[string][]string `json:"headers"`
-	Body             []byte              `json:"body"`
-	TransferEncoding []string            `json:"transfer_encoding"`
-	Form             url.Values          `json:"form"`
-}
 
 // Kafka Subrouter for Loosely Coupled queued requests via kafka
 func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap) http.Handler {
@@ -43,47 +28,18 @@ func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap
 	// All HTTP requests on this service path simply get forwarded to the kafka
 	// queue.
 	r.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("%s: %s:", r.Method, r.URL.Path)
-
-		// Remove the service routing path to get the remaining target path
-		targetPath := strings.TrimPrefix(r.URL.Path, (*service)["path"].(string))
-		log.Printf("targetPath: %s", targetPath)
-
-		bodyBytes, err := ioutil.ReadAll(r.Body)
+		servicePath := (*service)["path"].(string)
+		evReq, err := CreateEventReq(&servicePath, w, r)
 		if err != nil {
 			render.Render(w, r, ErrInternalError(err))
 			return
 		}
 
-		err = r.ParseForm()
+		reqBytes, err := evReq.GetBytes()
 		if err != nil {
 			render.Render(w, r, ErrInternalError(err))
 			return
 		}
-
-		evUUID, err := uuid.NewUUID()
-		if err != nil {
-			render.Render(w, r, ErrInternalError(err))
-			return
-		}
-
-		// Build event from request
-		evReq := KafkaEventReq{
-			EventUUID:        evUUID.String(),
-			Method:           r.Method,
-			Path:             targetPath,
-			Headers:          r.Header,
-			Body:             bodyBytes,
-			TransferEncoding: r.TransferEncoding,
-			Form:             r.Form,
-		}
-
-		reqBytes, err := json.Marshal(evReq)
-		if err != nil {
-			render.Render(w, r, ErrInternalError(err))
-			return
-		}
-		log.Printf("reqBytes: %s", reqBytes)
 
 		respChan := make(chan jsonutils.JSONMap)
 		h.AddCorrelator(evReq.EventUUID, &respChan)
@@ -194,8 +150,3 @@ func (h *Handlers) InitKafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSO
 
 	return w
 }
-
-// EmitEvent Write an event to kafka
-// func (h *Handlers) EmitEvent() {
-//
-// }
