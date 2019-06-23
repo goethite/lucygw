@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -42,7 +43,7 @@ func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap
 		}
 
 		respChan := make(chan jsonutils.JSONMap)
-		h.AddCorrelator(evReq.EventUUID, &respChan)
+		cor := h.AddCorrelator(evReq.EventUUID, &respChan, evReq)
 
 		// Send to any subscribers (e.g. a kubeless function wrapping a backend api
 		// to be loosely coupled)
@@ -58,32 +59,109 @@ func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap
 			return
 		}
 
-		// wait for response event (by uuid) from kafka
-		resp := <-respChan
-		log.Printf("resp from chan: %v", resp)
-
-		if _, ok := resp["error"]; ok {
-			code := 500
-			if _, ok := resp["code"]; ok {
-				code = int(resp["code"].(float64))
+		if val, ok := cor.preservedHeaders["X-Lucygw-Cb"]; ok {
+			if val[0] != "" {
+				render.JSON(w, r, jsonutils.JSONMap{
+					"event_uuid":   evReq.EventUUID,
+					"callback_url": val[0],
+				})
+				go waitForRespAndCallback(w, r, &respChan, cor)
+			} else {
+				render.Render(w, r, ErrInvalidJobRequest(errors.New("Header X-Lucygw-Cb has empty string")))
 			}
-			render.Render(w, r, &ErrResponse{
-				Err:            errors.New(resp["error"].(string)),
-				HTTPStatusCode: code,
-				StatusText:     "Execution Error.",
-				ErrorText: fmt.Sprintf(
-					"%s\n%s",
-					resp["error"].(string),
-					resp["stacktrace"].(string),
-				),
-			})
-			return
+		} else {
+			waitForResp(w, r, &respChan)
 		}
-
-		render.JSON(w, r, resp)
 	})
 
 	return r
+}
+
+func waitForResp(w http.ResponseWriter, r *http.Request, respChan *chan jsonutils.JSONMap) {
+	// wait for response event (by uuid) from kafka
+	resp := <-*respChan
+	log.Printf("resp from chan: %v", resp)
+	// log.Printf("for correlation: %v", cor)
+
+	if _, ok := resp["error"]; ok {
+		code := 500
+		if _, ok := resp["code"]; ok {
+			code = int(resp["code"].(float64))
+		}
+		render.Render(w, r, &ErrResponse{
+			Err:            errors.New(resp["error"].(string)),
+			HTTPStatusCode: code,
+			StatusText:     "Execution Error.",
+			ErrorText: fmt.Sprintf(
+				"%s\n%s",
+				resp["error"].(string),
+				resp["stacktrace"].(string),
+			),
+		})
+		return
+	}
+
+	render.JSON(w, r, resp)
+}
+
+// NOTE: Using the header X-Lucygw-Cb like this is a security risk and could
+// be abused in a DDOS attack - a better solution would be to have a whitelist
+// of authorised callback urls for the api route.
+func waitForRespAndCallback(w http.ResponseWriter, r *http.Request, respChan *chan jsonutils.JSONMap, cor *Correlation) {
+	// wait for response event (by uuid) from kafka
+	resp := <-*respChan
+	log.Printf("resp(for cb) from chan: %v", resp)
+	log.Printf("for correlation: %v", cor)
+
+	if _, ok := resp["error"]; ok {
+		code := 500
+		if _, ok := resp["code"]; ok {
+			code = int(resp["code"].(float64))
+		}
+		// Callback with error
+		body, err := json.Marshal(&ErrResponse{
+			Err:            errors.New(resp["error"].(string)),
+			HTTPStatusCode: code,
+			StatusText:     "Execution Error.",
+			ErrorText: fmt.Sprintf(
+				"%s\n%s",
+				resp["error"].(string),
+				resp["stacktrace"].(string),
+			),
+		})
+		if err != nil {
+			log.Printf("Error: %s", err)
+			return
+		}
+		res, err := http.Post(
+			cor.preservedHeaders["X-Lucygw-Cb"][0],
+			"application/json",
+			bytes.NewBuffer(body),
+		)
+		if err != nil {
+			log.Printf("Error: %s", err)
+			return
+		}
+		log.Printf("callback error res: %v", res)
+		return
+	}
+
+	// Callback results
+	body, err := json.Marshal(resp)
+	if err != nil {
+		log.Printf("Error: %s", err)
+		return
+	}
+	res, err := http.Post(
+		cor.preservedHeaders["X-Lucygw-Cb"][0],
+		"application/json",
+		bytes.NewBuffer(body),
+	)
+	if err != nil {
+		log.Printf("Error: %s", err)
+		return
+	}
+	log.Printf("callback res: %v", res)
 }
 
 func openTopicReader(brokers []string, service *jsonutils.JSONMap) *kafka.Reader {
