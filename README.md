@@ -129,6 +129,42 @@ PLAY RECAP *********************************************************************
 127.0.0.1                  : ok=4    changed=1    unreachable=0    failed=0
 ```
 
+### POST a request with Asynchronous Callback
+NOTE: This PoC implementation is currently for demo purposes only.
+
+Start a test listener for the callback (e.g. with netcat, in this case in the
+vagrant instance):
+```bash
+$ nc -l 18080
+```
+
+Post a request with the `X-Lucygw-Cb` header:
+```bash
+$ curl -sS \
+  'http://127.0.0.1:3303/automation/v1/play?group=goethite&name=dump.yml' \
+  -X POST \
+  -H "Content-type: application/json" \
+  --data '{}' \
+  -H 'X-Lucygw-Cb: http://127.0.0.1:18080/callback'
+```
+
+returns immediately with:
+```json
+{"callback_url":"http://127.0.0.1:18080/callback","event_uuid":"66bf0e1f-95ca-11e9-8b4a-0242ac110002"}
+```
+
+and later netcat reports the completed job:
+```
+POST /callback HTTP/1.1
+Host: 127.0.0.1:18080
+User-Agent: Go-http-client/1.1
+Content-Length: 904
+Content-Type: application/json
+Accept-Encoding: gzip
+
+{"data":{"log":"\nPLAY [all] *********************************************************************\n\nTASK [Gathering Facts] *********************************************************\nok: [127.0.0.1]\n\nTASK [debug] *******************************************************************\nok: [127.0.0.1] =\u003e {\n    \"ansible_password\": \"VARIABLE IS NOT DEFINED!\"\n}\n\nTASK [debug] *******************************************************************\nok: [127.0.0.1] =\u003e {\n    \"ansible_connection\": \"local\"\n}\n\nTASK [shell] *******************************************************************\nchanged: [127.0.0.1]\n\nPLAY RECAP *********************************************************************\n127.0.0.1                  : ok=4    changed=1    unreachable=0    failed=0   \n\n","status":{"active":null,"failed":null,"succeeded":1}},"event_uuid":"66bf0e1f-95ca-11e9-8b4a-0242ac110002"}
+```
+
 ## Kubeless consumer examples
 
 See:

@@ -4,7 +4,7 @@ GOVER="1.12.4"
 
 export DEBIAN_FRONTEND=noninteractive
 apt update
-apt install -y locales python3-pip python3-dev virtualenv
+apt install -y locales python3-pip python3-dev virtualenv netcat-openbsd
 
 # Locales
 locale-gen en_GB

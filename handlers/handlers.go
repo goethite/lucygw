@@ -75,7 +75,8 @@ func CreateEventReq(servicePath *string, w http.ResponseWriter, r *http.Request)
 
 // Correlation a correlator entry
 type Correlation struct {
-	respChan *chan jsonutils.JSONMap
+	respChan         *chan jsonutils.JSONMap
+	preservedHeaders map[string][]string
 }
 
 var (
@@ -89,13 +90,24 @@ type Handlers struct {
 
 // AddCorrelator adds UUID lookup for a request's response to be fed back to
 // the requestor.
-func (h *Handlers) AddCorrelator(ccUUID string, respChan *chan jsonutils.JSONMap) {
+func (h *Handlers) AddCorrelator(ccUUID string, respChan *chan jsonutils.JSONMap, evReq *HandlerEventReq) *Correlation {
 	cor := Correlation{
-		respChan: respChan,
+		respChan:         respChan,
+		preservedHeaders: make(map[string][]string),
 	}
+
+	// Preserve X-Lucygw- headers in correlator (e.g. for async callbacks)
+	for key, val := range evReq.Headers {
+		log.Printf("key: %s, val: %v", key, val)
+		if strings.HasPrefix(key, "X-Lucygw-") {
+			cor.preservedHeaders[key] = val
+		}
+	}
+
 	correlatorMux.Lock()
 	defer correlatorMux.Unlock()
 	correlator[ccUUID] = cor
+	return &cor
 }
 
 // GetCorrelator Gets the response channel by request UUID
