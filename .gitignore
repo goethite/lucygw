@@ -1,2 +1,3 @@
 /.vagrant/
 /loosecoupling
+*.pyc
