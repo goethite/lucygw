@@ -132,11 +132,11 @@ PLAY RECAP *********************************************************************
 ### POST a request with Asynchronous Callback
 NOTE: This PoC implementation is currently for demo purposes only.
 
-Start a test listener for the callback (e.g. with netcat, in this case in the
-vagrant instance):
+Start a test listener for the callback:
 ```bash
-$ nc -l 18080
+(ansible-k8s) > FLASK_APP=test/callback-listener.py flask run -h 0.0.0.0
 ```
+(defaults to port 5000)
 
 Post a request with the `X-Lucygw-Cb` header:
 ```bash
@@ -145,24 +145,30 @@ $ curl -sS \
   -X POST \
   -H "Content-type: application/json" \
   --data '{}' \
-  -H 'X-Lucygw-Cb: http://127.0.0.1:18080/callback'
+  -H 'X-Lucygw-Cb: http://172.17.0.1:5000/callback'
 ```
+(the IP 172.17.0.1 is the default docker ip of the parent host in the lucygw
+service container )
 
 returns immediately with:
 ```json
-{"callback_url":"http://127.0.0.1:18080/callback","event_uuid":"66bf0e1f-95ca-11e9-8b4a-0242ac110002"}
+{"callback_url":"http://172.17.0.1:5000/callback","event_uuid":"ee85d16d-96ae-11e9-ba39-0242ac110002"}
 ```
 
-and later netcat reports the completed job:
+and later `callback-listener.py` reports the completed job:
 ```
-POST /callback HTTP/1.1
-Host: 127.0.0.1:18080
-User-Agent: Go-http-client/1.1
-Content-Length: 904
-Content-Type: application/json
-Accept-Encoding: gzip
-
-{"data":{"log":"\nPLAY [all] *********************************************************************\n\nTASK [Gathering Facts] *********************************************************\nok: [127.0.0.1]\n\nTASK [debug] *******************************************************************\nok: [127.0.0.1] =\u003e {\n    \"ansible_password\": \"VARIABLE IS NOT DEFINED!\"\n}\n\nTASK [debug] *******************************************************************\nok: [127.0.0.1] =\u003e {\n    \"ansible_connection\": \"local\"\n}\n\nTASK [shell] *******************************************************************\nchanged: [127.0.0.1]\n\nPLAY RECAP *********************************************************************\n127.0.0.1                  : ok=4    changed=1    unreachable=0    failed=0   \n\n","status":{"active":null,"failed":null,"succeeded":1}},"event_uuid":"66bf0e1f-95ca-11e9-8b4a-0242ac110002"}
+req: {
+  "data": {
+    "log": "\nPLAY [all] *********************************************************************\n\nTASK [Gathering Facts] *********************************************************\nok: [127.0.0.1]\n\nTASK [debug] *******************************************************************\nok: [127.0.0.1] => {\n    \"ansible_password\": \"VARIABLE IS NOT DEFINED!\"\n}\n\nTASK [debug] *******************************************************************\nok: [127.0.0.1] => {\n    \"ansible_connection\": \"local\"\n}\n\nTASK [shell] *******************************************************************\nchanged: [127.0.0.1]\n\nPLAY RECAP *********************************************************************\n127.0.0.1                  : ok=4    changed=1    unreachable=0    failed=0   \n\n",
+    "status": {
+      "active": null,
+      "failed": null,
+      "succeeded": 1
+    }
+  },
+  "event_uuid": "ee85d16d-96ae-11e9-ba39-0242ac110002"
+}
+172.17.0.2 - - [24/Jun/2019 19:36:17] "POST /callback HTTP/1.1" 200 -
 ```
 
 ## Kubeless consumer examples
@@ -178,3 +184,5 @@ See:
 See:
 * [ansible-k8s](services/ansible-k8s) like ansible-coupler above, but as a
 kafka consumer service.
+* [callback-listener.py](services/ansible-k8s/test/callback-listener.py) - a
+demo callback listener.
