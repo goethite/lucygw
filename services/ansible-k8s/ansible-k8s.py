@@ -4,8 +4,8 @@ import os
 import traceback
 import time
 import json
-from yaml import load
-# import base64
+from yaml import load, dump
+import base64
 # import tempfile
 
 from kubernetes import client, config
@@ -67,17 +67,56 @@ def sendError(event_uuid, code, err, producer):
 
 
 def wrapped(evbody, producer):
-    # evbody = {}
-    # value = event.value
-    # if value is not None and value != "":
-    #     evbody = json.loads(value)
-    # print("evbody:", evbody)
+    # NOTE: if you catch any errors here then they wont be reported back to the
+    # user.  See usage of sendError() for reporting errors back
     path = evbody["path"]
-    form = evbody["form"]
-    method = evbody["method"]
+    form = evbody["form"]  # e.g. ?group=goethite&name=my-task
+    method = evbody["method"]   # POST/GET/etc
     headers = evbody["headers"]
 
-    print("%s: %s form: %s, evbody: %s" % (method, path, form, evbody))
+    # Thoughts on evbody["body"] structure:
+    # (aiming for a loose-coupling structure that maps to ansible inventory)
+    # body: {
+    #   targets: { // equiv to ansible inv
+    #     hosts: {
+    #       "a_host": {params: {host_vars_here...}}
+    #     },
+    #     groups: {
+    #       a_group: {
+    #         hosts: {},
+    #         params: {group_vars_here...}
+    #       }
+    #     }
+    #   },
+    #   params: {global vars, i.e. ansible --extra-vars=...}
+    # }
+    data = {}
+    try:
+        dataStr = base64.b64decode(evbody["body"])
+    except TypeError as err:
+        sendError(
+            evbody["event_uuid"],
+            400,
+            "Failed to decode base64 data: %s, err: %s" % (
+                evbody["body"], err),
+            producer
+        )
+        return
+
+    try:
+        data = json.loads(dataStr)
+    except json.JSONDecodeError as err:
+        sendError(
+            evbody["event_uuid"],
+            400,
+            "Failed to decode json data: %s, err: %s" % (dataStr, err),
+            producer
+        )
+        return
+
+    print("%s: %s form: %s, data: %s, evbody: %s" %
+          (method, path, form, data, evbody))
+    print("headers: %s" % (headers))
 
     namespace = "default"
 
@@ -132,6 +171,29 @@ def wrapped(evbody, producer):
             return
         image = group_config["groups"][group]["image"]
 
+        # TODO: Generate ansible inventory here, for injection into Job
+        # also INI vs JSON format?
+        # TODO: establish a loose-coupling way to drive this
+        inv = {
+            "all": {
+                "hosts": {
+                    "127.0.0.1": {
+                        "ansible_connection": "local"
+                    }
+                }
+            }
+        }
+        inv_yaml = dump(inv)
+        inv_b64 = base64.b64encode(
+            bytearray(inv_yaml, encoding="utf-8")
+        )
+
+        # Encode data params to be injected as a vars file (YAML)
+        data_yaml = dump(data)
+        data_b64 = base64.b64encode(
+            bytearray(data_yaml, encoding='utf-8')
+        )
+
         body = {
             "api_version": "batch/v1",
             "kind": "Job",
@@ -147,7 +209,13 @@ def wrapped(evbody, producer):
                                 "command": [
                                     "sh",
                                     "-c",
-                                    "echo '127.0.0.1 ansible_connection=local' > /tmp/inv/hosts"
+                                    """
+                                    echo %s | base64 -d > /tmp/inv/hosts.yaml &&
+                                    echo %s | base64 -d > /tmp/inv/vars.yaml
+                                    """ % (
+                                        inv_b64.decode('utf-8'),
+                                        data_b64.decode('utf-8')
+                                    )
                                 ],
                                 "volumeMounts": [
                                     {
@@ -166,9 +234,10 @@ def wrapped(evbody, producer):
                                 "imagePullPolicy": "Always",
                                 # "command": ["ansible"],
                                 "args": [
-                                    "-i", "/tmp/inv/hosts",
+                                    "-i", "/tmp/inv/hosts.yaml",
                                     # "dump.yml"
-                                    name
+                                    name,
+                                    "--extra-vars", "@/tmp/inv/vars.yaml"
                                 ],
                                 "volumeMounts": [
                                     {
@@ -254,7 +323,7 @@ def send(event_uuid, namespace, body, producer):
 
 
 for event in consumer:
-    print(event)
+    # print(event)
 
     # Establish the producer for each function call, cannot be global...?
     producer = KafkaProducer(
@@ -264,7 +333,7 @@ for event in consumer:
     value = event.value
     if value is not None and value != "":
         evbody = json.loads(value)
-    print("evbody:", evbody)
+    # print("evbody:", evbody)
 
     try:
         wrapped(evbody, producer)

@@ -1,3 +1,4 @@
+# TODO: use flask_restful - https://flask-restful.readthedocs.io/en/latest/quickstart.html#a-minimal-api
 import json
 from flask import Flask, request, make_response
 app = Flask(__name__)
