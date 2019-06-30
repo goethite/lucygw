@@ -202,6 +202,16 @@ def wrapped(evbody, producer):
         "volumeMounts": volume_mounts
     }
 
+    env_vars = [
+        # TODO: for hashivault_vars plugin
+        {"name": "HASHIVAULT_VARS_DEBUG", "value": "1"},
+        {"name": "VAULT_SKIP_VERIFY", "value": "1"},
+        {"name": "VAULT_ADDR",
+            "value": "http://127.0.0.1:8200"},
+        {"name": "VAULT_TOKEN", "value": "TODO"}
+        # TODO: resolve token from pull-mode approle
+    ]
+
     namespace = "default"
 
     body = {}
@@ -228,14 +238,7 @@ def wrapped(evbody, producer):
                                     "-m", "ping", "127.0.0.1"
                                 ],
                                 "volumeMounts": volume_mounts,
-                                "env": [
-                                    # TODO: for hashivault_vars plugin
-                                    {"name": "HASHIVAULT_VARS_DEBUG", "value": "1"},
-                                    {"name": "VAULT_SKIP_VERIFY", "value": "1"},
-                                    {"name": "VAULT_ADDR", "value": "TODO"},
-                                    {"name": "VAULT_TOKEN", "value": "TODO"}
-                                    # TODO: resolve token from pull-mode approle
-                                ]
+                                "env": env_vars
                             }
                         ],
                         "volumes": volumes,
@@ -291,7 +294,8 @@ def wrapped(evbody, producer):
                                     name,
                                     "--extra-vars", "@/tmp/inv/vars.yaml"
                                 ],
-                                "volumeMounts": volume_mounts
+                                "volumeMounts": volume_mounts,
+                                "env": env_vars
                             }
                         ],
                         "volumes": volumes,
