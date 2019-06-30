@@ -74,22 +74,6 @@ def wrapped(evbody, producer):
     method = evbody["method"]   # POST/GET/etc
     headers = evbody["headers"]
 
-    # Thoughts on evbody["body"] structure:
-    # (aiming for a loose-coupling structure that maps to ansible inventory)
-    # body: {
-    #   targets: { // equiv to ansible inv
-    #     hosts: {
-    #       "a_host": {params: {host_vars_here...}}
-    #     },
-    #     groups: {
-    #       a_group: {
-    #         hosts: {},
-    #         params: {group_vars_here...}
-    #       }
-    #     }
-    #   },
-    #   params: {global vars, i.e. ansible --extra-vars=...}
-    # }
     data = {}
     try:
         dataStr = base64.b64decode(evbody["body"])
@@ -118,6 +102,106 @@ def wrapped(evbody, producer):
           (method, path, form, data, evbody))
     print("headers: %s" % (headers))
 
+    if "targets" not in data:
+        sendError(evbody["event_uuid"], 400,
+                  "request body must have targets", producer)
+        return
+
+    # body: {
+    #   targets: { // equiv to ansible inv
+    #     hosts: {"host_a": {host_vars_here...}, ...}, or
+    #     hosts: ["host_a", ...],
+    #     groups: {
+    #       a_group: {
+    #         hosts: as hosts above,
+    #         params: {group_vars_here...}
+    #       }, ...
+    #     },
+    #     params: {inv vars for all groups}
+    #   },
+    #   params: {overriding global vars, i.e. ansible --extra-vars=...}
+    # }
+    inv = {
+        "all": {
+            "hosts": {},
+            "children": {}
+        }
+    }
+    # hosts and host_vars in default "all" group
+    if "hosts" in data["targets"]:
+        for host_name in data["targets"]["hosts"]:  # dicts of hosts objs
+            if isinstance(data["targets"]["hosts"], list):
+                inv["all"]["hosts"][host_name] = {}
+            else:
+                inv["all"]["hosts"][host_name] = data["targets"]["hosts"][host_name]
+
+    if "groups" in data["targets"]:
+        all_children = inv["all"]["children"]
+        for group_name in data["targets"]["groups"]:
+            group = data["targets"]["groups"][group_name]
+            # hosts and host_vars for hosts in this group
+            if "hosts" in group:
+                for host_name in group["hosts"]:
+                    if isinstance(group["hosts"], list):
+                        all_children[group_name] = {}
+                    else:
+                        all_children[group_name] = group["hosts"][host_name]
+            # group_vars
+            if "params" in group:
+                all_children[group_name]["vars"] = group["params"]
+
+    # group "all" vars in inventory
+    if "params" in data["targets"]:
+        inv["all"]["vars"] = data["targets"]["params"]
+
+    extra_vars = {}
+    if "params" in data:
+        extra_vars = data["params"]
+
+    inv_yaml = dump(inv)
+    print("inv_yaml:\n%s" % inv_yaml)
+    inv_b64 = base64.b64encode(
+        bytearray(inv_yaml, encoding="utf-8")
+    )
+
+    # Encode data params to be injected as a extra_vars file (YAML)
+    extra_vars_yaml = dump(extra_vars)
+    print("extra_vars_yaml:\n%s" % extra_vars_yaml)
+    extra_vars_b64 = base64.b64encode(
+        bytearray(extra_vars_yaml, encoding='utf-8')
+    )
+
+    # Create inv/vars init container to prepopulate container
+    volumes = [
+        {
+            "name": "inventory",
+            "medium": "Memory",
+            "emptyDir": {}
+        }
+    ]
+    volume_mounts = [
+        {
+            "mountPath": "/tmp/inv",
+            "name": "inventory"
+        }
+    ]
+    inv_init_container = {
+        "name": "init-inventory",
+        "image": "busybox",
+        "command": [
+            "sh",
+            "-c",
+            """
+            echo %s | base64 -d > /tmp/inv/hosts.yaml &&
+            echo %s | base64 -d > /tmp/inv/vars.yaml
+            """ % (
+                inv_b64.decode('utf-8'),
+                extra_vars_b64.decode('utf-8')
+            )
+        ],
+        "volumeMounts": volume_mounts
+    }
+
     namespace = "default"
 
     body = {}
@@ -130,16 +214,31 @@ def wrapped(evbody, producer):
             "spec": {
                 "template": {
                     "spec": {
+                        "initContainers": [
+                            inv_init_container
+                        ],
                         "containers": [
                             {
                                 "name": "myjob",
-                                # "image": "jmal98/ansiblecm:2.5.5",
                                 "image": "goethite/gostint-ansible:2.7.5",
                                 "imagePullPolicy": "Always",
                                 "command": ["ansible"],
-                                "args": ["-m", "ping", "127.0.0.1"]
+                                "args": [
+                                    "-i", "/tmp/inv/hosts.yaml",
+                                    "-m", "ping", "127.0.0.1"
+                                ],
+                                "volumeMounts": volume_mounts,
+                                "env": [
+                                    # TODO: for hashivault_vars plugin
+                                    {"name": "HASHIVAULT_VARS_DEBUG", "value": "1"},
+                                    {"name": "VAULT_SKIP_VERIFY", "value": "1"},
+                                    {"name": "VAULT_ADDR", "value": "TODO"},
+                                    {"name": "VAULT_TOKEN", "value": "TODO"}
+                                    # TODO: resolve token from pull-mode approle
+                                ]
                             }
                         ],
+                        "volumes": volumes,
                         "restartPolicy": "Never"
                     }
                 }
@@ -153,46 +252,23 @@ def wrapped(evbody, producer):
         name = form.get("name")[0]
 
         if group is None or group == "":
-            sendError(evbody["event_uuid"], 501,
+            sendError(evbody["event_uuid"], 400,
                       "param group is missing", producer)
             return
         if name is None or name == "":
-            sendError(evbody["event_uuid"], 501,
+            sendError(evbody["event_uuid"], 400,
                       "param name is missing", producer)
             return
 
         if group not in group_config["groups"]:
             sendError(
                 evbody["event_uuid"],
-                501,
+                400,
                 "param group does not have entry in group_config",
                 producer
             )
             return
         image = group_config["groups"][group]["image"]
-
-        # TODO: Generate ansible inventory here, for injection into Job
-        # also INI vs JSON format?
-        # TODO: establish a loose-coupling way to drive this
-        inv = {
-            "all": {
-                "hosts": {
-                    "127.0.0.1": {
-                        "ansible_connection": "local"
-                    }
-                }
-            }
-        }
-        inv_yaml = dump(inv)
-        inv_b64 = base64.b64encode(
-            bytearray(inv_yaml, encoding="utf-8")
-        )
-
-        # Encode data params to be injected as a vars file (YAML)
-        data_yaml = dump(data)
-        data_b64 = base64.b64encode(
-            bytearray(data_yaml, encoding='utf-8')
-        )
 
         body = {
             "api_version": "batch/v1",
@@ -203,57 +279,22 @@ def wrapped(evbody, producer):
                 "template": {
                     "spec": {
                         "initContainers": [
-                            {
-                                "name": "init-inventory",
-                                "image": "busybox",
-                                "command": [
-                                    "sh",
-                                    "-c",
-                                    """
-                                    echo %s | base64 -d > /tmp/inv/hosts.yaml &&
-                                    echo %s | base64 -d > /tmp/inv/vars.yaml
-                                    """ % (
-                                        inv_b64.decode('utf-8'),
-                                        data_b64.decode('utf-8')
-                                    )
-                                ],
-                                "volumeMounts": [
-                                    {
-                                        "mountPath": "/tmp/inv",
-                                        "name": "inventory"
-                                    }
-                                ]
-                            }
+                            inv_init_container
                         ],
                         "containers": [
                             {
                                 "name": "myjob",  # TODO:
-                                # "image": "jmal98/ansiblecm:2.5.5",
-                                # "image": "goethite/gostint-ansible:2.7.5",
                                 "image": image,
                                 "imagePullPolicy": "Always",
-                                # "command": ["ansible"],
                                 "args": [
                                     "-i", "/tmp/inv/hosts.yaml",
-                                    # "dump.yml"
                                     name,
                                     "--extra-vars", "@/tmp/inv/vars.yaml"
                                 ],
-                                "volumeMounts": [
-                                    {
-                                        "mountPath": "/tmp/inv",
-                                        "name": "inventory"
-                                    }
-                                ]
+                                "volumeMounts": volume_mounts
                             }
                         ],
-                        "volumes": [
-                            {
-                                "name": "inventory",
-                                "medium": "Memory",
-                                "emptyDir": {}
-                            }
-                        ],
+                        "volumes": volumes,
                         "restartPolicy": "Never"
                     }
                 }
