@@ -1,15 +1,17 @@
 # lucygw - Experiments in Microservices Loose Coupling with Go, Kafka and Python
-(formally called `lucy_proxy`)
 
 Provide a generic ingress api routing to Kafka topic queues for backend apps
-to consume (e.g. using kubeless functions or dedicated services to loosely
-couple with backend apis).
+to consume (e.g. using kubeless functions or dedicated services) as loosely
+couple apis.
+
+This project is a playground for loose-coupling microservice apis. Contributions
+are welcome - so feel free to raise Issues/Discussions/PRs.
 
 ## Setup Environment
-Port-Forward:
-```bash
-kubectl -n kubeless port-forward --address 0.0.0.0 service/kafka 9092
-```
+My current setup is a MicroK8s server running the
+[incubator/kafka](https://github.com/helm/charts/tree/master/incubator/kafka)
+helm chart (with a few minor tweaks (for NodePort access to the brokers) -
+which I will post soon on github) and Vagrant running lucygw:
 
 ```bash
 vagrant up
