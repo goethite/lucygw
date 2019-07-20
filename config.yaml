@@ -1,7 +1,10 @@
 ---
 kafka:
   brokers:
-    - "172.17.0.1:9092"
+    # - "172.17.0.1:9092"
+    - "192.168.0.62:31090"
+    - "192.168.0.62:31091"
+    - "192.168.0.62:31092"
 
 # Information here is presented at the root of the api: GET /, returned as JSON
 site:

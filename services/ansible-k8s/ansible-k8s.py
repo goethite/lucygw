@@ -26,7 +26,9 @@ v1 = client.CoreV1Api()
 
 consumer = KafkaConsumer(
     "automation_v1_request",
-    bootstrap_servers=['127.0.0.1:9092']
+    bootstrap_servers=['192.168.0.62:31090',
+                       '192.168.0.62:31091', '192.168.0.62:31092']
+    # bootstrap_servers=['127.0.0.1:9092']
     # bootstrap_servers=['kafka.kubeless.svc.cluster.local:9092']
 )
 
@@ -204,7 +206,7 @@ def wrapped(evbody, producer):
 
     env_vars = [
         # TODO: for hashivault_vars plugin
-        {"name": "HASHIVAULT_VARS_DEBUG", "value": "1"},
+        {"name": "HASHIVAULT_VARS_DEBUG", "value": "0"},
         {"name": "VAULT_SKIP_VERIFY", "value": "1"},
         {"name": "VAULT_ADDR",
             "value": "http://127.0.0.1:8200"},
@@ -372,7 +374,9 @@ for event in consumer:
 
     # Establish the producer for each function call, cannot be global...?
     producer = KafkaProducer(
-        bootstrap_servers=['127.0.0.1:9092'])
+        bootstrap_servers=['192.168.0.62:31090',
+                           '192.168.0.62:31091', '192.168.0.62:31092'])
+    # bootstrap_servers=['127.0.0.1:9092'])
 
     evbody = {}
     value = event.value

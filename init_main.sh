@@ -18,4 +18,5 @@ export PATH=$PATH:/usr/local/go/bin
 echo 'export PATH=$PATH:/usr/local/go/bin:~/go/bin' >> ~vagrant/.bashrc
 echo 'export GOPATH=$HOME/go' >> ~vagrant/.bashrc
 
-echo "172.17.0.1 kafka-0.broker.kubeless.svc.cluster.local" >> /etc/hosts
+# echo "172.17.0.1 kafka-0.broker.kubeless.svc.cluster.local" >> /etc/hosts
+echo "192.168.0.62 kafka.cluster.local" >> /etc/hosts

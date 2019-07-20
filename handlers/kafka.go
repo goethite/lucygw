@@ -59,6 +59,12 @@ func (h *Handlers) Kafka(service *jsonutils.JSONMap, kafkaCfg *jsonutils.JSONMap
 			return
 		}
 
+		// TODO: Look into having a dedicated go routine to handle responses
+		// requiring callbacks.  Would need the cb header to be passed to the
+		// kubeless/service and returned in the response - removing the need to
+		// persist it here in the API GW to allow for HA/stateless operation.
+		// The kubeless/service would need to persist this as a meta tag in the
+		// kubernetes job, so it can recover on restart...
 		if val, ok := cor.preservedHeaders["X-Lucygw-Cb"]; ok {
 			if val[0] != "" {
 				render.JSON(w, r, jsonutils.JSONMap{
