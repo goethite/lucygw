@@ -33,6 +33,12 @@ consumer = KafkaConsumer(
 )
 
 
+class Failed_Api_Response:
+    active = None
+    failed = 1
+    succeeded = None
+
+
 def get_job_status(batchApi, namespace, job_name):
     batchApi_resp = {}
     try:
@@ -42,11 +48,18 @@ def get_job_status(batchApi, namespace, job_name):
         )
     except client.rest.ApiException as e:
         print("Error calling k8s batch api: %s\n" % e)
+        print("Error calling k8s batch api:\n", e)
+        print("status: %s\n" % e.status)
+        print("Exception body: %s\n" % e.body)
+        return Failed_Api_Response()
     except Exception as err:
         print(str(err))
         print(traceback.format_exc())
-        return
-    # print("read batchApi_resp:", batchApi_resp)
+        return {}
+    print("read batchApi_resp:", batchApi_resp)
+    if batchApi_resp.status is None:
+        print("No status returned from job: %s\n", batchApi_resp)
+        return {}
     return batchApi_resp.status
 
 
@@ -237,7 +250,8 @@ def wrapped(evbody, producer):
                                 "command": ["ansible"],
                                 "args": [
                                     "-i", "/tmp/inv/hosts.yaml",
-                                    "-m", "ping", "127.0.0.1"
+                                    "-m", "ping", "127.0.0.1",
+                                    "--extra-vars", "@/tmp/inv/vars.yaml"
                                 ],
                                 "volumeMounts": volume_mounts,
                                 "env": env_vars
@@ -246,7 +260,10 @@ def wrapped(evbody, producer):
                         "volumes": volumes,
                         "restartPolicy": "Never"
                     }
-                }
+                },
+                "parallelism": 1,
+                "completions": 1,
+                "backoffLimit": 0
             }
         }
         send(evbody["event_uuid"], namespace, body, producer)
@@ -303,7 +320,10 @@ def wrapped(evbody, producer):
                         "volumes": volumes,
                         "restartPolicy": "Never"
                     }
-                }
+                },
+                "parallelism": 1,
+                "completions": 1,
+                "backoffLimit": 0
             }
         }
         send(evbody["event_uuid"], namespace, body, producer)
@@ -332,25 +352,38 @@ def send(event_uuid, namespace, body, producer):
     pods = v1.list_namespaced_pod(
         namespace, label_selector="job-name=myjob")  # TODO:
 
-    pod = pods.items[0]
-    pod_name = pod.metadata.name
+    if len(pods.items) > 0:
+        pod = pods.items[0]
+        pod_name = pod.metadata.name
 
-    # Get log from job pod
-    pod_log = v1.read_namespaced_pod_log(
-            pod_name,
-            namespace,
-            # timestamps=True
-            tail_lines=100  # limit to last n lines
+        # Get log from job pod
+        try:
+            pod_log = v1.read_namespaced_pod_log(
+                    pod_name,
+                    namespace,
+                    # timestamps=True
+                    tail_lines=100  # limit to last n lines
+                )
+        except client.rest.ApiException as e:
+            pod_log = "Error: Failed to get job's POD log: %s" % e
+    else:
+        pod_log = "Error: No pod(s) found for Job"
+    print("pod_log:", pod_log)
+
+    try:
+        batchApi.delete_namespaced_job(
+            namespace=namespace,
+            name="myjob",
+            body={}
         )
-    # print("pod_log:", pod_log)
+    except client.rest.ApiException as e:
+        pod_log += "\nError: Failed to delete job: %s" % e
 
-    batchApi.delete_namespaced_job(
-        namespace=namespace,
-        name="myjob",
-        body={}
-    )
+    try:
+        v1.delete_namespaced_pod(pod_name, namespace, body={})
+    except client.rest.ApiException as e:
+        pod_log += "\nError: Failed to delete job's pod: %s" % e
 
-    v1.delete_namespaced_pod(pod_name, namespace, body={})
     response = {
         "event_uuid": event_uuid,
         "data": {
